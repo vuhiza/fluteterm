@@ -1,4 +1,7 @@
 //! Softbuffer implementation using CoreGraphics.
+//!
+//! Modified for fluteterm (2026): alpha channel, screen colour space and buffer
+//! recycling. See ../../PATCHES.md. Original: softbuffer 0.4.8, MIT OR Apache-2.0.
 use crate::backend_interface::*;
 use crate::error::InitError;
 use crate::{util, Rect, SoftBufferError};
@@ -333,6 +336,7 @@ impl<D: HasDisplayHandle, W: HasWindowHandle> BufferInterface for BufferImpl<'_,
         //
         // TODO: Use `CGBitmapInfo::new` once the next version of objc2-core-graphics is released.
         let bitmap_info = CGBitmapInfo(
+            // fluteterm patch: keep the alpha channel (was NoneSkipFirst) so the panel can be see-through.
             CGImageAlphaInfo::PremultipliedFirst.0
                 | CGImageComponentInfo::Integer.0
                 | CGImageByteOrderInfo::Order32Little.0
