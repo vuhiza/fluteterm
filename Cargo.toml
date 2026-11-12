@@ -1,0 +1,45 @@
+[package]
+name = "fluteterm"
+version = "0.1.0"
+description = "A drop-down terminal for macOS with Claude Code and Orca integration"
+license = "MIT"
+edition = "2024"
+
+[[bin]]
+name = "fluteterm"
+path = "src/main.rs"
+
+[dependencies]
+ab_glyph = "0.2.32"
+alacritty_terminal = "0.26.0"
+anyhow = "1.0.104"
+dirs = "7.0.0"
+env_logger = "0.11.11"
+fontdue = "0.9.5"
+global-hotkey = "0.10.0"
+libc = "0.2.191"
+log = "0.4.35"
+mac-notification-sys = "0.6.15"
+objc2 = "0.5"
+png = "0.18"
+raw-window-handle = "0.6"
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.154"
+softbuffer = "0.4"
+toml = "1.2.1"
+tray-icon = "0.26.1"
+unicode-width = "0.2.3"
+winit = "0.30"
+
+[patch.crates-io]
+softbuffer = { path = "vendor/softbuffer" }
+
+[profile.dev]
+opt-level = 1
+
+[profile.dev.package."*"]
+opt-level = 3
+
+[profile.release]
+lto = "thin"
+codegen-units = 4
