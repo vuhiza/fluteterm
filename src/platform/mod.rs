@@ -8,6 +8,7 @@
 //! * notify: Notification Center banners.
 
 pub mod notify;
+pub mod present;
 pub mod tray;
 
 use objc2::encode::{Encode, Encoding};

@@ -216,9 +216,9 @@ pub struct App {
     pub fonts: Fonts,
     pub font_delta: f32,
     proxy: EventLoopProxy<UserEvent>,
+    // Declared before `window` so the presenter is torn down first (fields drop in order).
+    presenter: Option<crate::platform::present::Presenter>,
     pub window: Option<Rc<Window>>,
-    context: Option<softbuffer::Context<Rc<Window>>>,
-    surface: Option<softbuffer::Surface<Rc<Window>, Rc<Window>>>,
     pub geo: Option<Geometry>,
     pub vis: Vis,
     pub tabs: Vec<Tab>,
@@ -312,8 +312,7 @@ impl App {
             font_delta: 0.0,
             proxy,
             window: None,
-            context: None,
-            surface: None,
+            presenter: None,
             geo: None,
             vis: Vis::Hidden,
             tabs: vec![],
@@ -481,6 +480,9 @@ impl App {
 
     fn finish_hide(&mut self) {
         self.vis = Vis::Hidden;
+        if let Some(p) = &mut self.presenter {
+            p.trim();
+        }
         release_memory();
         if let Some(w) = &self.window {
             platform::order_out(w);
@@ -1290,6 +1292,16 @@ impl App {
         let tab_arg = |v: &Value| -> Option<u64> { v.as_u64().or_else(|| v.as_str().and_then(|s| s.parse().ok())) };
         let reply = match cmd {
             "ping" => json!({"ok": true, "version": env!("CARGO_PKG_VERSION")}),
+            "layer" => match &self.presenter {
+                // Self-check of the display layer (used by tests / debugging).
+                Some(p) => {
+                    let (f, has_contents, scale, flipped) = p.layer_state();
+                    let win = self.window.as_ref().map(|w| (w.inner_size().width, w.inner_size().height, w.scale_factor()));
+                    json!({"ok": true, "frame": [f.origin.x, f.origin.y, f.size.width, f.size.height], "contents": has_contents,
+                           "scale": scale, "flipped": flipped, "window_px": win.map(|w| [w.0 as f64, w.1 as f64]), "window_scale": win.map(|w| w.2)})
+                }
+                None => json!({"ok": false, "error": "no presenter"}),
+            },
             "toggle" => {
                 self.toggle();
                 json!({"ok": true, "visible": self.visible()})
@@ -2239,11 +2251,9 @@ impl ApplicationHandler<UserEvent> for App {
             }
         };
         platform::setup_window(&window);
-        let context = softbuffer::Context::new(window.clone()).expect("softbuffer context");
-        let surface = softbuffer::Surface::new(&context, window.clone()).expect("softbuffer surface");
+        let presenter = platform::present::Presenter::new(&window).expect("layer-backed window");
         self.window = Some(window);
-        self.context = Some(context);
-        self.surface = Some(surface);
+        self.presenter = Some(presenter);
 
         // Global hotkey.
         match GlobalHotKeyManager::new() {

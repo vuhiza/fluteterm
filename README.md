@@ -144,10 +144,9 @@ Every tab exports `FLUTETERM_TAB_ID`, so scripts can address their own tab.
 
 ## Credits
 
-Built on [alacritty_terminal](https://github.com/alacritty/alacritty),
-[winit](https://github.com/rust-windowing/winit) and
-[softbuffer](https://github.com/rust-windowing/softbuffer) (vendored with three macOS patches; see
-`vendor/softbuffer/PATCHES.md`). Font: [JetBrains Mono](https://www.jetbrains.com/lp/mono/) (OFL).
+Built on [alacritty_terminal](https://github.com/alacritty/alacritty) and
+[winit](https://github.com/rust-windowing/winit); the macOS display code is fluteterm's own
+(`src/platform/present.rs`). Font: [JetBrains Mono](https://www.jetbrains.com/lp/mono/) (OFL).
 Visual direction inspired by [yami](https://github.com/Trendorin/yami).
 
 MIT © vuhiza

@@ -59,9 +59,9 @@ pub enum SAct {
 }
 
 pub struct SettingsWin {
+    // Declared before `window` so it is dropped first (fields drop in order).
+    presenter: crate::platform::present::Presenter,
     pub window: Rc<Window>,
-    _context: softbuffer::Context<Rc<Window>>,
-    surface: softbuffer::Surface<Rc<Window>, Rc<Window>>,
     pub page: Page,
     pub recording: bool,
     /// Text being typed into the custom accent field.
@@ -131,8 +131,7 @@ impl App {
         let Ok(window) = el.create_window(attrs) else { return };
         let window = Rc::new(window);
         platform::setup_window_level(&window, 26, true);
-        let Ok(context) = softbuffer::Context::new(window.clone()) else { return };
-        let Ok(surface) = softbuffer::Surface::new(&context, window.clone()) else { return };
+        let Some(presenter) = crate::platform::present::Presenter::new(&window) else { return };
         if let Some(scr) = platform::target_screen(true) {
             let fr = scr.frame;
             let x = fr.origin.x + ((fr.size.width - WIN_W) / 2.0).round();
@@ -142,7 +141,7 @@ impl App {
         platform::set_blur(&window, 24);
         platform::show(&window);
         window.request_redraw();
-        self.settings = Some(SettingsWin { window, _context: context, surface, page, recording: false, hex_edit: None, hits: vec![], mouse: (0.0, 0.0) });
+        self.settings = Some(SettingsWin { window, presenter, page, recording: false, hex_edit: None, hits: vec![], mouse: (0.0, 0.0) });
     }
 
     pub fn close_settings(&mut self) {
@@ -164,22 +163,23 @@ impl App {
         let size = s.window.inner_size();
         let (w, h) = (size.width.max(1), size.height.max(1));
         let scale = s.window.scale_factor() as f32;
-        if s.surface.resize(std::num::NonZeroU32::new(w).unwrap(), std::num::NonZeroU32::new(h).unwrap()).is_ok() {
-            if let Ok(mut buf) = s.surface.buffer_mut() {
-                {
-                    let mut cv = Canvas::new(&mut buf, w as i32, h as i32, scale);
-                    cv.clear();
-                    s.hits = self.draw_settings(&mut cv, s.page, s.recording, s.hex_edit.clone());
-                }
-                if let Some((path, reply)) = self.snapshot_settings.take() {
-                    let r = super::draw::save_png(&path, &buf, w, h);
-                    let _ = reply.send(match r {
-                        Ok(()) => serde_json::json!({"ok": true, "path": path.display().to_string()}),
-                        Err(e) => serde_json::json!({"ok": false, "error": e.to_string()}),
-                    });
-                }
-                let _ = buf.present();
+        {
+            let (page, recording, hex) = (s.page, s.recording, s.hex_edit.clone());
+            let buf = s.presenter.frame(w as usize, h as usize);
+            let hits = {
+                let mut cv = Canvas::new(buf, w as i32, h as i32, scale);
+                cv.clear();
+                self.draw_settings(&mut cv, page, recording, hex)
+            };
+            if let Some((path, reply)) = self.snapshot_settings.take() {
+                let r = super::draw::save_png(&path, buf, w, h);
+                let _ = reply.send(match r {
+                    Ok(()) => serde_json::json!({"ok": true, "path": path.display().to_string()}),
+                    Err(e) => serde_json::json!({"ok": false, "error": e.to_string()}),
+                });
             }
+            s.presenter.present();
+            s.hits = hits;
         }
         self.settings = Some(s);
     }

@@ -2,7 +2,6 @@
 //! premultiplied canvas; decorations snap to the logical pixel grid
 //! (`cv.unit()`), text is smooth.
 
-use std::num::NonZeroU32;
 use std::time::{Duration, Instant};
 
 use alacritty_terminal::index::{Column, Line, Point};
@@ -129,26 +128,25 @@ impl App {
         let scale = window.scale_factor() as f32;
         let visible_h = window.inner_size().height.max(1) as i32;
         let (w, h) = (((geo.w * scale as f64).round() as u32).max(1), ((geo.h * scale as f64).round() as u32).max(1));
-        let Some(mut surface) = self.surface.take() else { return };
-        if surface.resize(NonZeroU32::new(w).unwrap(), NonZeroU32::new(h).unwrap()).is_ok() {
-            if let Ok(mut buf) = surface.buffer_mut() {
-                {
-                    let mut cv = Canvas::new(&mut buf, w as i32, h as i32, scale);
-                    cv.clear();
-                    let off = (visible_h - h as i32).min(0);
-                    self.draw_frame(&mut cv, &geo, off, progress);
-                }
-                if let Some((path, reply)) = self.snapshot.take() {
-                    let r = save_png(&path, &buf, w, h);
-                    let _ = reply.send(match r {
-                        Ok(()) => serde_json::json!({"ok": true, "path": path.display().to_string(), "width": w, "height": h}),
-                        Err(e) => serde_json::json!({"ok": false, "error": e.to_string()}),
-                    });
-                }
-                let _ = buf.present();
+        let Some(mut presenter) = self.presenter.take() else { return };
+        {
+            let buf = presenter.frame(w as usize, h as usize);
+            {
+                let mut cv = Canvas::new(buf, w as i32, h as i32, scale);
+                cv.clear();
+                let off = (visible_h - h as i32).min(0);
+                self.draw_frame(&mut cv, &geo, off, progress);
+            }
+            if let Some((path, reply)) = self.snapshot.take() {
+                let r = save_png(&path, buf, w, h);
+                let _ = reply.send(match r {
+                    Ok(()) => serde_json::json!({"ok": true, "path": path.display().to_string(), "width": w, "height": h}),
+                    Err(e) => serde_json::json!({"ok": false, "error": e.to_string()}),
+                });
             }
         }
-        self.surface = Some(surface);
+        presenter.present();
+        self.presenter = Some(presenter);
     }
 
     fn draw_frame(&mut self, cv: &mut Canvas, geo: &Geometry, off: i32, progress: f32) {
