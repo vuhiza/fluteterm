@@ -16,6 +16,7 @@ pub const EVENTS: &[(&str, bool)] = &[
     ("PreToolUse", true),
     ("PostToolUse", true),
     ("Notification", false),
+    ("PermissionRequest", true),
     ("Stop", false),
     ("PreCompact", false),
     ("SessionEnd", false),

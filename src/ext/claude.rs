@@ -44,6 +44,8 @@ struct ClaudeTab {
     transcript: Option<PathBuf>,
     cwd: Option<PathBuf>,
     session_id: Option<String>,
+    /// The permission prompt currently shown (to avoid double alerts).
+    prompt_id: Option<String>,
 }
 
 impl ClaudeTab {
@@ -61,6 +63,7 @@ impl ClaudeTab {
             transcript: None,
             cwd: None,
             session_id: None,
+            prompt_id: None,
         }
     }
     fn set(&mut self, s: State) {
@@ -288,17 +291,28 @@ impl Extension for Claude {
                 t.tool = Some("compacting".into());
                 t.set(State::Tool);
             }
-            "Notification" => {
+            // Fired the moment Claude shows a permission dialog (with the exact tool call).
+            // `Notification` follows a few seconds later for the same prompt; only alert once.
+            "PermissionRequest" | "Notification" => {
+                let is_request = ev == "PermissionRequest";
                 let msg = p["message"].as_str().unwrap_or("Claude needs your attention").to_string();
-                let needs_permission = msg.to_lowercase().contains("permission");
-                t.message = Some(msg.clone());
-                if needs_permission {
+                let permission = is_request
+                    || p["notification_type"].as_str() == Some("permission_prompt")
+                    || msg.to_lowercase().contains("permission");
+                if !permission {
+                    t.message = Some(msg);
+                } else {
+                    let prompt_id = p["prompt_id"].as_str().map(String::from);
+                    let already = t.state == State::Attention && (prompt_id.is_none() || prompt_id == t.prompt_id);
+                    let body = if is_request { format!("wants to run {}", tool_label(p)) } else { msg.clone() };
+                    t.message = Some(body.clone());
+                    t.prompt_id = prompt_id;
                     t.set(State::Attention);
-                    if self.notify_attention && !watching {
+                    if !already && self.notify_attention && !watching {
                         let place = t.place();
                         ctx.push(Action::Notify(Notice {
                             title: format!("claude needs you · {place}"),
-                            body: msg,
+                            body,
                             tab,
                             level: Level::Warn,
                             actions: vec![
