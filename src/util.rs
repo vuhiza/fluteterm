@@ -27,6 +27,10 @@ pub fn migrate_legacy_config() {
     if !old.is_dir() || new.exists() {
         return;
     }
+    // Never move it from under a still-running old instance.
+    if std::os::unix::net::UnixStream::connect(old.join("drpdown.sock")).is_ok() {
+        return;
+    }
     if std::fs::rename(&old, &new).is_ok() {
         // Stale runtime files from the old name.
         let _ = std::fs::remove_file(new.join("drpdown.sock"));

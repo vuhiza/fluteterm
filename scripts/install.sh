@@ -3,14 +3,6 @@
 # Optional: --claude (install Claude Code hooks)  --login (start at login)
 set -euo pipefail
 cd "$(dirname "$0")/.."
-./scripts/bundle.sh
-mkdir -p ~/.local/bin ~/Applications
-# Quit a running instance first.
-if [ -x ~/.local/bin/fluteterm ]; then ~/.local/bin/fluteterm quit 2>/dev/null || true; fi
-for _ in $(seq 1 50); do
-  pgrep -f "fluteterm.app/Contents/MacOS/fluteterm" >/dev/null || break
-  sleep 0.1
-done
 # Upgrading from the pre-rename "drpdown": stop it and retire its files. Running Claude
 # Code sessions still call the old hook path until restarted, so the old app path
 # becomes a link to fluteterm (delete ~/Applications/drpdown.app any time later).
@@ -24,6 +16,14 @@ if [ -e ~/Applications/drpdown.app ] && [ ! -L ~/Applications/drpdown.app ]; the
   ln -s ~/Applications/fluteterm.app ~/Applications/drpdown.app
 fi
 [ -L ~/.local/bin/drpdown ] && rm -f ~/.local/bin/drpdown
+./scripts/bundle.sh
+mkdir -p ~/.local/bin ~/Applications
+# Quit a running instance first.
+if [ -x ~/.local/bin/fluteterm ]; then ~/.local/bin/fluteterm quit 2>/dev/null || true; fi
+for _ in $(seq 1 50); do
+  pgrep -f "fluteterm.app/Contents/MacOS/fluteterm" >/dev/null || break
+  sleep 0.1
+done
 rm -rf ~/Applications/fluteterm.app
 cp -R dist/fluteterm.app ~/Applications/
 # The CLI is a symlink into the bundle so hooks, CLI and app are one binary.

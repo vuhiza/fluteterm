@@ -257,6 +257,9 @@ pub struct App {
 }
 
 pub fn run() -> anyhow::Result<()> {
+    // Only the app itself migrates the pre-rename config (never a CLI call such as a
+    // build step), and only once the old instance has quit.
+    util::migrate_legacy_config();
     let event_loop = EventLoop::<UserEvent>::with_user_event()
         .with_activation_policy(ActivationPolicy::Accessory)
         .with_default_menu(false)

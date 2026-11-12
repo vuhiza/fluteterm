@@ -26,7 +26,6 @@ mod util;
 
 fn main() {
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("warn")).init();
-    util::migrate_legacy_config();
     if let Err(e) = cli::run() {
         eprintln!("fluteterm: {e:#}");
         std::process::exit(1);
