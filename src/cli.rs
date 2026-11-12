@@ -220,7 +220,9 @@ fn start() -> anyhow::Result<()> {
     if !std::io::stdout().is_terminal() || std::env::var("FLUTETERM_FOREGROUND").is_ok() {
         return app::run();
     }
-    let exe = std::env::current_exe()?;
+    // Resolve symlinks (e.g. Homebrew's bin/fluteterm) so the app runs from inside its
+    // .app bundle and gets the bundle's identity (notification name and icon).
+    let exe = std::env::current_exe().and_then(std::fs::canonicalize)?;
     let _ = std::fs::create_dir_all(util::config_dir());
     let log = std::fs::OpenOptions::new().create(true).append(true).open(util::log_path())?;
     let mut cmd = std::process::Command::new(exe);

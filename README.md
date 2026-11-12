@@ -1,201 +1,153 @@
-# fluteterm
+<div align="center">
 
-A drop-down terminal for macOS, written in Rust. It slides down from under the menu bar when
-you press **F12**, like Yakuake/Guake on Linux. It looks like pixel art but isn't: text is
-smooth, and the pixel feel comes from crisp 1px details, dithered textures and stepped motion.
-Claude Code and Orca are built in but optional. Their tabs, status segments, palette entries and
-menu items only appear when the tool is installed and switched on in settings, so on a Mac without
-them it's just a clean drop-down terminal.
+# ▼ fluteterm
 
+**The drop-down terminal for macOS, built for the agent era.**
+
+Press <kbd>F12</kbd>: a terminal slides down from under the menu bar, Quake/Yakuake style.
+Every tab keeps running when you close it, and your Claude Code sessions report what they're doing.
+
+[Website](https://vuhiza.github.io/fluteterm/) · [Install](#install) · [Features](#features) · [Claude Code](#claude-code) · [Customise](#customise)
+
+<img src="site/img/hero.png" alt="fluteterm with a Claude Code session, a permission prompt and the usage status bar" width="100%">
+
+</div>
 
 ## Install
 
 ```sh
-./scripts/install.sh            # builds, installs ~/Applications/fluteterm.app + ~/.local/bin/fluteterm, launches it
-./scripts/install.sh --claude   # …and wires up Claude Code hooks
-./scripts/install.sh --login    # …and starts fluteterm at login
+brew install vuhiza/tap/fluteterm
 ```
 
-To build a drag-to-Applications disk image instead:
+Then run `fluteterm` and press <kbd>F12</kbd> (<kbd>fn</kbd>+<kbd>F12</kbd> on laptop keyboards).
+To start it at login: `brew services start fluteterm`.
+
+Requires macOS 12+. Homebrew builds it from source, so there's no Gatekeeper prompt, and
+installs `tmux` for persistent tabs.
+
+<details>
+<summary>Build from source instead</summary>
 
 ```sh
-./scripts/dmg.sh                # → dist/fluteterm-<version>-<arch>.dmg (ad-hoc signed)
+git clone https://github.com/vuhiza/fluteterm && cd fluteterm
+./scripts/install.sh            # ~/Applications/fluteterm.app + ~/.local/bin/fluteterm
+./scripts/dmg.sh                # or: a drag-to-Applications disk image in dist/
 ```
 
-Press **F12** to toggle. On Mac laptop keyboards F12 is a media key by default, so either press
-**fn+F12** or set another key in the config (`hotkey = "Alt+Space"`), or enable *System Settings →
-Keyboard → Use F1, F2, etc. keys as standard function keys*. Left-click the ▼ menu-bar icon to
-toggle; right-click it for the menu.
+Needs Rust 1.85+.
+</details>
 
-Requirements: macOS 12+, Rust 1.85+ (only for building).
+## Features
+
+<img src="site/img/drop.gif" alt="the panel dropping down with an ordered-dither dissolve" width="100%">
+
+- **Drop-down, everywhere.** A global hotkey (F12 by default, any combination you record), on the
+  screen under the mouse, over full-screen apps and on every Space. It's see-through with a
+  native background blur.
+- **Looks like pixel art, reads like a terminal.** Text is smooth JetBrains Mono. The pixel feel comes
+  from crisp 1px details, dithered textures and stepped, dissolving motion.
+- **Tabs that survive anything.** Quit fluteterm and your shells, builds and Claude sessions keep
+  running (invisibly, via tmux); start it again and they're all back. After a reboot, tabs reopen in
+  their directories and Claude tabs resume their conversations.
+- **Claude Code built in.** Per-tab state (thinking, running a tool, needs you), model and context
+  meter, the 5-hour usage window, and allow / deny for permission prompts without switching tabs.
+- **Orca built in.** Worktrees and agents in the status bar, ⌘⇧O to browse them, live attach to an
+  agent's terminal, notifications when agents finish or need you.
+- **Command palette (⌘K)** for everything: tabs, agents, themes, settings.
+- **A real settings window (⌘,)**: themes, an optional accent colour, fonts, a hotkey recorder,
+  window, notifications and extensions. Every change applies live.
+- **Native macOS:** menu-bar item, Notification Center banners, shortcuts that work in any input
+  language, copy-on-select, selections that survive redraws.
+- **Fast and small:** about 70 MB of memory, 0% CPU when idle, written in Rust.
+- **Optional integrations:** without Claude Code or Orca installed, none of their UI appears.
+
+<img src="site/img/palette.png" alt="command palette with Claude Code commands" width="100%">
 
 ## Keys
 
 | key | action |
 |---|---|
-| F12 (global) | drop down / pull up |
-| ⌘T / ⌘W | new tab (same directory) / close tab |
-| ⌘1…⌘9, ⌘⇧[ ⌘⇧], ⌃Tab | switch tabs |
-| ⌘K (or ⌘⇧P) | command palette |
-| ⌘⇧C | new Claude Code session in the current directory |
-| ⌘⇧O | Orca worktrees and agents (⏎ shell there, ⌘⏎ Claude there) |
-| ⌘⇧A | agent commands (/compact, /clear, resume, go to agent…) |
-| ⌘C / ⌘V, right-click | copy selection / paste (bracketed) |
-| ⌘+ ⌘- ⌘0 | text size |
-| ⌘, | settings window (⌘K → "edit config file" for the raw TOML) |
-| ⌘Q / ⌘H | hide (quit from the menu-bar menu or palette) |
-| ⇧PgUp/PgDn/Home/End, wheel | scrollback |
-| ⌘-click | open URL / path |
-| drag the bottom grip | resize the panel (saved) |
-| Option | Meta/Alt (left Option by default, `option_as_alt`) |
-| ⇧⏎ | newline in Claude Code (sends ESC CR) |
-
-## Persistent sessions
-
-Tabs survive quitting fluteterm, restarts and (partly) reboots:
-
-- **tmux backend** (default when `tmux` is installed): every tab is a session on a private tmux server
-  (`tmux -L fluteterm`) with tmux's UI fully hidden: no status bar, no prefix key. **Quit fluteterm** and
-  shells, Claude sessions, builds and scrollback keep running. The next start re-attaches to all of
-  them, with the same tabs, order, active tab and directories. Inside these tabs the mouse wheel
-  scrolls tmux history, dragging copies to the clipboard, and ⇧-drag uses fluteterm's own selection.
-- **After a reboot** (processes gone): tabs come back in their directories with their titles, and
-  Claude tabs resume their conversation with `claude --resume <session id>`.
-- **plain backend** (`[session] backend = "plain"`, or no tmux): the same layout restore, plus the
-  last 2000 lines of each tab replayed dimmed above a `── restored ──` marker.
-
-⌘W ends a tab for good. The menu bar has **Quit fluteterm (tabs keep running)** and **Quit and close
-all tabs**. State lives in `~/.config/fluteterm/session.json`; add your own tmux settings in
-`~/.config/fluteterm/tmux.local.conf`.
+| <kbd>F12</kbd> (global) | drop down / pull up |
+| <kbd>⌘T</kbd> / <kbd>⌘W</kbd> | new tab (same directory) / close tab |
+| <kbd>⌘1</kbd>…<kbd>⌘9</kbd>, <kbd>⌘⇧[</kbd> <kbd>⌘⇧]</kbd> | switch tabs |
+| <kbd>⌘K</kbd> | command palette |
+| <kbd>⌘⇧C</kbd> | new Claude Code session here |
+| <kbd>⌘⇧O</kbd> / <kbd>⌘⇧A</kbd> | Orca worktrees / agent commands |
+| <kbd>⌘,</kbd> | settings |
+| <kbd>⌘C</kbd> / <kbd>⌘V</kbd> | copy / paste (selecting also copies) |
+| <kbd>⌘+</kbd> <kbd>⌘-</kbd> <kbd>⌘0</kbd> | text size |
+| <kbd>⌘</kbd>-click | open URL or path |
+| <kbd>⇧</kbd>-drag | select even inside mouse-driven apps |
 
 ## Claude Code
 
-`fluteterm install claude` adds hooks to `~/.claude/settings.json`; a backup is made first, and
-`fluteterm uninstall claude` reverts it. Inside fluteterm tabs, Claude Code then reports what it's doing:
+```sh
+fluteterm install claude        # or Settings → claude → install hooks
+```
 
-- **Tab badge**: `✻ claude <project>` shows a spinner while it works, `⚠` when it needs
-  permission or input, and ✓ when a turn finished while you were in another tab.
-- **Status bar**: model, a context-window meter (read from the transcript), the current
-  tool (`Bash(cargo check)`), turn time and output tokens.
-- **Notifications**:
-  - When the panel is hidden, you get a Notification Center banner; clicking it drops the panel into that tab.
-  - When the panel is open, you get a pixel pop-up with **allow ⏎ / deny ⎋ / go to tab**. Answering
-    from there sends the key to that Claude session, so you don't have to switch tabs.
-- **Status bar, on every tab** (right side, all clickable):
-  - `✻ 2 live · 1 working · 1 needs you`: clicking jumps to the session that needs you, or opens the agents list.
-  - `2h 58m left in 5h window · 44.7M`: the current 5-hour usage window that Claude subscription limits
-    are counted in, with a meter for elapsed time and the tokens used in it.
-  - `today 76.1M`: today's tokens.
+This adds hooks to `~/.claude/settings.json`. It backs the file up first, only ever touches
+fluteterm's own entries, and is removable any time with Settings → claude → remove hooks.
 
-  The window and today's total cover **every** Claude Code session on this Mac (fluteterm, other terminals,
-  Orca agents). They come from `~/.claude/projects/**/*.jsonl`, read incrementally and de-duplicated.
-  Turn them off with `[claude] status_usage = false` or in settings → claude.
-- **Palette**: new session / `--continue` / `--resume`, send `/compact`, `/clear`, `/cost`, `/model`,
-  jump to any Claude tab.
+- **Tabs:** `✻ claude <project>` shows a spinner while working, ⚠ when it needs you, ✓ when done.
+- **Status bar:** model, a context-window meter, the current tool and turn time. On every tab you
+  also see live sessions, the **5-hour usage window** and **today's tokens** across every Claude
+  Code session on your Mac.
+- **Permission prompts:** a pop-up with **allow ⏎ / deny ⎋ / go to tab** answers Claude from
+  wherever you are. When the panel is hidden, Notification Center banners take you to the right tab.
+- **Palette:** new session, `--continue`, `--resume`, `/compact`, `/clear`, jump to any Claude tab.
 
-Hooks are no-ops outside fluteterm, because they need `$FLUTETERM_TAB_ID`. Without hooks, Claude tabs are
-still recognised by their process and window title.
+## Customise
 
-## Orca
+<img src="site/img/settings.png" alt="settings window" width="60%" align="right">
 
-The `orca` extension polls `orca worktree ps --json`: every 5 s while the panel is visible, every 20 s
-while hidden.
-
-- **Status bar**: `◆ busy/total agents · N wt`.
-- **Tabs**: a shell inside an Orca worktree is labelled with the worktree name and shows dots for its busy agents.
-- **⌘⇧O**: worktrees with status and agents:
-  - **worktree row**: ⏎ opens a shell there, ⌘⏎ runs Claude there.
-  - **agent row**: ⏎ **attaches** the agent's Orca terminal in a fluteterm tab, ⌘⏎ shows it in Orca.
-    Attach is a live mirror: `orca terminal read --screen` about 4×/s, with your keystrokes forwarded
-    by `orca terminal send`. `ctrl-]` detaches and the agent keeps running.
-  - **launch**: starts an Orca agent in the background, then a pop-up reports the result (or Orca's error)
-    with **attach here / show in Orca** buttons.
-  - "orca open" and "show in Orca" pull the panel up so the Orca app is actually visible.
-- **Notifications** when an Orca agent finishes or starts waiting for you.
-- **Menu-bar menu**: a live list of Orca agents.
-
-## Customising
-
-Everything lives in `~/.config/fluteterm/config.toml`, which is created with comments on first run and
-reloaded live. Highlights:
+Everything lives in `~/.config/fluteterm/config.toml` (commented and live-reloaded) and in the
+settings window:
 
 ```toml
 hotkey = "F12"
-theme = "graphite"          # graphite clay moss glacier orchid blood paper, or your own
-accent = "#e0a030"          # optional: override the theme's accent (omit = theme default)
-[font]   family = "JetBrains Mono"  size = 14  line_height = 1.2
-[window] height = 0.5  shape = "strip"  opacity = 0.86  blur = 14  crt = false
-[motion] pattern = "bayer"  cell = 2  open_ms = 220  close_ms = 160
+theme  = "graphite"   # graphite clay moss glacier orchid blood paper
+accent = "#3fb8a8"    # optional
+
+[window]
+height = 0.5
+shape  = "strip"      # strip | centred | floating
+blur   = 14
+
+[session]
+backend = "auto"      # tmux keeps processes alive; plain restores layout
 ```
 
-**Themes** are one accent colour plus optional overrides (`~/.config/fluteterm/themes/<name>.toml`;
-see `example.toml`). Every tone is derived from the accent, the same way as in the design board.
+**Themes** are one accent colour plus optional overrides in `~/.config/fluteterm/themes/*.toml`.
 
-**Code-free extensions** in config.toml:
+**Code-free extensions:** `[[profile]]` adds tab types with shortcuts, `[[module]]` adds
+status-bar segments fed by any command, and `[[command]]` adds palette entries. Examples are in
+the generated config.
 
-```toml
-[[profile]]          # new tab type, in the palette, optional shortcut
-name = "htop"
-command = "htop"
-key = "cmd+shift+h"
+<br clear="right">
 
-[[module]]           # status-bar segment from any command
-name = "battery"
-command = "pmset -g batt | grep -Eo '[0-9]+%'"
-interval = 60
+## Scripting
 
-[[command]]          # palette entry
-name = "deploy staging"
-run = "make deploy-staging"
-tab = true
-```
-
-## Scripting / IPC
-
-The binary is also its own remote control. Commands go over a unix socket at
-`~/.config/fluteterm/fluteterm.sock` as newline-delimited JSON.
+The `fluteterm` binary is also a remote control. Commands go over a unix socket as
+newline-delimited JSON.
 
 ```sh
-fluteterm toggle | show | hide
-fluteterm open claude --cwd ~/Projects/x        # or: fluteterm open -- htop
-fluteterm send --tab 3 'cargo test\n'
-fluteterm notify "build" "green" --level ok
-fluteterm status ci "✓ green"                    # custom status segment (empty text clears)
-fluteterm list                                   # tabs as JSON
-fluteterm palette orca
-fluteterm snapshot /tmp/frame.png                # PNG of the current frame
+fluteterm open claude --cwd ~/code/app     # new tab
+fluteterm send --tab 3 'cargo test\n'      # type into a tab
+fluteterm notify "deploy" "done" --level ok
+fluteterm status ci "✓ green"              # custom status-bar segment
+fluteterm read --tab 3                     # a tab's visible text
+fluteterm do "theme: clay"                 # run any palette command
+fluteterm list                             # tabs as JSON
 ```
 
-Every tab exports `FLUTETERM_TAB_ID`, `FLUTETERM_SOCKET`, `FLUTETERM_BIN` and `TERM_PROGRAM=fluteterm`, so
-scripts running inside a tab can address it (e.g. `fluteterm notify done --tab $FLUTETERM_TAB_ID`).
-Any tool can send `{"cmd":"event","source":"<name>","tab":N,"payload":{…}}`. Built-in extensions
-pick up the sources they own, and new Rust extensions can claim new ones.
+Every tab exports `FLUTETERM_TAB_ID`, so scripts can address their own tab.
 
-## Architecture
+## Credits
 
-```
-src/
-  main.rs          entry
-  cli.rs           CLI, hook entry point, installers
-  app/mod.rs       winit app: window, show/hide animation, tabs, input, actions, IPC dispatch
-  app/draw.rs      frame composition: panel, tab bar, terminal grid, status bar, toasts, palette, dissolve
-  app/palette.rs   command palette state + fuzzy matching
-  term/            alacritty_terminal sessions (PTY), key encoding
-  render/          canvas (premultiplied ARGB), text (fontdue + lazy system fallbacks),
-                   procedural glyphs (box drawing, blocks, shades-as-dither, braille, Claude symbols),
-                   pixel icons
-  ext/             extension trait + built-ins: claude, orca, user (config-defined), core
-  platform/        macOS: window level/Spaces/blur/activation, screens, tray, notifications
-  ipc.rs           socket server/client
-  config.rs, theme.rs
-vendor/softbuffer  softbuffer 0.4.8 with three patches: alpha channel (transparency),
-                   screen colour space (no per-frame colour conversion), buffer recycling
-```
+Built on [alacritty_terminal](https://github.com/alacritty/alacritty),
+[winit](https://github.com/rust-windowing/winit) and
+[softbuffer](https://github.com/rust-windowing/softbuffer) (vendored with three macOS patches; see
+`vendor/softbuffer/PATCHES.md`). Font: [JetBrains Mono](https://www.jetbrains.com/lp/mono/) (OFL).
+Visual direction inspired by [yami](https://github.com/Trendorin/yami).
 
-**Writing an extension** means implementing `ext::Extension`. It observes IPC events, its own
-background messages and a periodic `tick`. It contributes palette commands, tab decorations,
-status segments and tray lines, and it acts by pushing `Action`s. Register it in `App::new`.
-`ext/orca.rs` is a complete example with a background poller.
-
-Rendering is CPU-only into a shared buffer: about 6–10% CPU on an M-series Mac while something animates,
-0% while idle or hidden, and a ~70 MB footprint.
+MIT © vuhiza

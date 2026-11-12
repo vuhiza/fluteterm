@@ -2,7 +2,7 @@
 # Build fluteterm.app (menu-bar app, no Dock icon) into dist/.
 set -euo pipefail
 cd "$(dirname "$0")/.."
-cargo build --release
+cargo build --release --locked
 APP=dist/fluteterm.app
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"

@@ -1,0 +1,337 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>fluteterm: the drop-down terminal for macOS</title>
+<meta name="description" content="A drop-down terminal for macOS. Press F12, it slides down from the menu bar. Tabs that survive anything, Claude Code built in, pixel-art looks with smooth text.">
+<meta property="og:title" content="fluteterm: the drop-down terminal for macOS">
+<meta property="og:description" content="Press F12. Tabs that survive anything. Claude Code built in.">
+<meta property="og:image" content="https://vuhiza.github.io/fluteterm/img/hero.png">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" href="img/icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #0b0a0a; --panel: #121010; --surface: #1a1717; --surfaceHi: #231f1f; --line: #3a3333;
+  --text: #f4f0ee; --dim: #bdb5b3; --faint: #8f8583; --accent: #3fb8a8; --onAccent: #0b0909;
+  --warn: #ffaa28; --ok: #78c878;
+  --u: 2px; /* one "pixel" of the illusion */
+  --mono: 'JetBrains Mono', ui-monospace, Menlo, monospace;
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.6 var(--mono); -webkit-font-smoothing: antialiased; }
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+img, video { display: block; max-width: 100%; }
+.wrap { max-width: 1180px; margin: 0 auto; padding: 0 24px; }
+
+/* dithered backdrop */
+.dither { position: fixed; inset: 0; z-index: -1; pointer-events: none;
+  background:
+    radial-gradient(ellipse at 70% -10%, color-mix(in srgb, var(--accent) 16%, transparent), transparent 55%),
+    repeating-conic-gradient(#ffffff06 0 25%, transparent 0 50%) 0 0 / 4px 4px; }
+
+/* pixel details */
+.notch { clip-path: polygon(var(--u) 0, calc(100% - var(--u)) 0, 100% var(--u), 100% calc(100% - var(--u)), calc(100% - var(--u)) 100%, var(--u) 100%, 0 calc(100% - var(--u)), 0 var(--u)); }
+.label { font-size: 12px; letter-spacing: .14em; text-transform: uppercase; color: var(--faint); font-weight: 600; display: flex; align-items: center; gap: 10px; }
+.label::before { content: ""; width: 6px; height: 6px; background: var(--accent); }
+.card { background: var(--panel); border: 1px solid var(--line); box-shadow: 6px 6px 0 #000a; }
+
+/* nav */
+nav { position: sticky; top: 0; z-index: 10; backdrop-filter: blur(14px); background: color-mix(in srgb, var(--bg) 78%, transparent); border-bottom: 1px solid var(--line); }
+nav .wrap { display: flex; align-items: center; gap: 22px; height: 54px; }
+.logo { display: flex; align-items: center; gap: 10px; font-weight: 700; letter-spacing: .08em; color: var(--text); }
+.logo svg { width: 20px; height: 20px; image-rendering: pixelated; }
+nav .links { margin-left: auto; display: flex; gap: 20px; font-size: 13px; }
+nav .links a { color: var(--dim); }
+nav .links a:hover { color: var(--text); text-decoration: none; }
+
+/* hero */
+.hero { padding: 76px 0 40px; }
+.hero h1 { font-size: clamp(34px, 5.4vw, 64px); line-height: 1.05; margin: 18px 0 18px; letter-spacing: -.01em; }
+.hero h1 em { font-style: normal; color: var(--accent); }
+.hero p.lead { color: var(--dim); font-size: 17px; max-width: 720px; margin: 0 0 28px; }
+.install { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
+.cmd { display: flex; align-items: center; gap: 14px; background: var(--surface); border: 1px solid var(--line); padding: 12px 14px 12px 18px; font-size: 15px; }
+.cmd .p { color: var(--accent); }
+.btn { font: 600 13px var(--mono); border: 0; cursor: pointer; padding: 9px 14px; background: var(--accent); color: var(--onAccent); }
+.btn.ghost { background: transparent; color: var(--text); border: 1px solid var(--line); }
+.btn:hover { filter: brightness(1.1); }
+.hint { color: var(--faint); font-size: 13px; margin-top: 12px; }
+kbd { font: 600 12px var(--mono); padding: 1px 6px; border: 1px solid var(--line); background: var(--surface); color: var(--text); }
+
+/* fake desktop with the drop */
+.desk { margin-top: 44px; position: relative; overflow: hidden; border: 1px solid var(--line); box-shadow: 8px 8px 0 #000c; background: #1b1830; }
+.desk .menubar { height: 26px; display: flex; align-items: center; gap: 18px; padding: 0 14px; font: 500 12px -apple-system, system-ui, sans-serif; color: #fff; background: #ffffff1c; backdrop-filter: blur(20px); }
+.desk .menubar b { font-weight: 700; }
+.desk .menubar .r { margin-left: auto; display: flex; gap: 14px; align-items: center; }
+.desk .menubar svg { width: 14px; height: 14px; image-rendering: pixelated; }
+.desk video { width: 100%; }
+
+/* sections */
+section { padding: 72px 0; }
+h2 { font-size: clamp(24px, 3.2vw, 36px); margin: 14px 0 14px; line-height: 1.15; }
+p.sub { color: var(--dim); max-width: 760px; margin: 0 0 30px; }
+.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(270px, 1fr)); gap: 16px; }
+.feat { padding: 22px; }
+.feat .ico { width: 28px; height: 28px; margin-bottom: 14px; image-rendering: pixelated; }
+.feat h3 { margin: 0 0 8px; font-size: 16px; }
+.feat p { margin: 0; color: var(--dim); font-size: 14px; }
+.split { display: grid; grid-template-columns: 1.15fr .85fr; gap: 34px; align-items: center; }
+@media (max-width: 900px) { .split { grid-template-columns: 1fr; } }
+.shot { border: 1px solid var(--line); box-shadow: 8px 8px 0 #000c; }
+ul.dots { list-style: none; padding: 0; margin: 0; }
+ul.dots li { padding: 9px 0 9px 22px; position: relative; color: var(--dim); border-bottom: 1px dotted var(--line); }
+ul.dots li::before { content: ""; position: absolute; left: 2px; top: 18px; width: 6px; height: 6px; background: var(--accent); }
+ul.dots b { color: var(--text); font-weight: 600; }
+
+/* meters & swatches */
+.meter { display: inline-flex; gap: 2px; vertical-align: middle; }
+.meter i { width: 9px; height: 13px; background: var(--surfaceHi); display: block; }
+.meter i.f { background: var(--accent); }
+.swatches { display: flex; flex-wrap: wrap; gap: 10px; margin: 18px 0 8px; }
+.sw { width: 38px; height: 38px; border: 1px solid #0006; cursor: pointer; padding: 0; }
+.sw.on { outline: 2px solid var(--text); outline-offset: 3px; }
+.status { display: flex; flex-wrap: wrap; gap: 0; border: 1px solid var(--line); background: var(--panel); font-size: 13px; margin-top: 18px; }
+.status span { padding: 8px 14px; display: inline-flex; gap: 8px; align-items: center; color: var(--dim); }
+.status span + span { border-left: 1px dotted var(--line); }
+.status .a { color: var(--accent); }
+.status .w { color: var(--warn); }
+
+/* keys */
+table.keys { width: 100%; border-collapse: collapse; font-size: 14px; }
+table.keys td { padding: 10px 12px; border-bottom: 1px dotted var(--line); }
+table.keys td:first-child { white-space: nowrap; width: 1%; }
+table.keys td:last-child { color: var(--dim); }
+
+/* CTA */
+.cta { text-align: center; padding: 90px 0; }
+.cta .install { justify-content: center; }
+footer { border-top: 1px solid var(--line); padding: 28px 0; color: var(--faint); font-size: 13px; }
+footer .wrap { display: flex; flex-wrap: wrap; gap: 18px; justify-content: space-between; }
+
+/* dither reveal */
+.reveal { -webkit-mask-size: 8px 8px; mask-size: 8px 8px; }
+@media (prefers-reduced-motion: reduce) { .reveal { -webkit-mask-image: none !important; mask-image: none !important; } }
+</style>
+</head>
+<body>
+<div class="dither"></div>
+
+<nav>
+  <div class="wrap">
+    <a class="logo" href="#"><svg viewBox="0 0 8 8" fill="currentColor"><path d="M0 1h8v1H0zM1 2h6v1H1zM2 3h4v1H2zM3 4h2v1H3zM0 6h3v1H0zM4 6h4v1H4z"/></svg>fluteterm</a>
+    <div class="links">
+      <a href="#features">features</a><a href="#claude">claude code</a><a href="#sessions">sessions</a><a href="#keys">keys</a>
+      <a href="https://github.com/vuhiza/fluteterm">github ↗</a>
+    </div>
+  </div>
+</nav>
+
+<header class="hero">
+  <div class="wrap">
+    <div class="label">drop-down terminal · macOS · rust</div>
+    <h1>Press <em>F12</em>.<br>Your terminal drops in.</h1>
+    <p class="lead">fluteterm slides down from under the menu bar on any screen, over any app. Every tab keeps
+      running when you close it, and your Claude Code sessions report what they're doing. It looks
+      like pixel art and reads like a terminal.</p>
+    <div class="install">
+      <div class="cmd notch"><span class="p">$</span><span id="cmd">brew install vuhiza/tap/fluteterm</span>
+        <button class="btn notch" data-copy="#cmd">copy</button></div>
+      <a class="btn ghost notch" href="https://github.com/vuhiza/fluteterm">view source</a>
+    </div>
+    <div class="hint">then run <kbd>fluteterm</kbd> and press <kbd>F12</kbd> (or <kbd>fn</kbd>+<kbd>F12</kbd>) · macOS 12+ · free & open source (MIT)</div>
+
+    <div class="desk reveal">
+      <div class="menubar"><span></span><b>Finder</b><span>File</span><span>Edit</span><span>View</span>
+        <div class="r"><svg viewBox="0 0 8 8" fill="#fff"><path d="M0 1h8v1H0zM1 2h6v1H1zM2 3h4v1H2zM3 4h2v1H3zM0 6h3v1H0zM4 6h4v1H4z"/></svg><span>Wed 13:52</span></div>
+      </div>
+      <video src="img/drop.mp4" poster="img/drop-poster.jpg" autoplay muted loop playsinline aria-label="fluteterm dropping down"></video>
+    </div>
+  </div>
+</header>
+
+<section id="features">
+  <div class="wrap">
+    <div class="label reveal">features</div>
+    <h2 class="reveal">Everything you'd want from a drop-down terminal, and then some.</h2>
+    <p class="sub reveal">Built from scratch in Rust: about 70 MB of memory, 0% CPU when idle, crisp on Retina.</p>
+    <div class="grid">
+      <div class="card feat notch reveal"><canvas class="ico" data-icon="arrow"></canvas><h3>Drops in, anywhere</h3><p>A global hotkey you can record, on the screen under your mouse, over full-screen apps and on every Space. See-through with native blur.</p></div>
+      <div class="card feat notch reveal"><canvas class="ico" data-icon="square"></canvas><h3>Tabs that survive anything</h3><p>Quit it and your shells, builds and agents keep running. Start it again and they're all back. After a reboot, tabs reopen where they were.</p></div>
+      <div class="card feat notch reveal"><canvas class="ico" data-icon="claude"></canvas><h3>Claude Code built in</h3><p>Per-tab agent state, a context meter, the 5-hour usage window, and answers to permission prompts without switching tabs.</p></div>
+      <div class="card feat notch reveal"><canvas class="ico" data-icon="orca"></canvas><h3>Orca built in</h3><p>Worktrees and agents in the status bar, ⌘⇧O to browse them, live attach to an agent's terminal.</p></div>
+      <div class="card feat notch reveal"><canvas class="ico" data-icon="search"></canvas><h3>Command palette</h3><p>⌘K for tabs, agents, themes and settings, with fuzzy search. Scriptable from the CLI too.</p></div>
+      <div class="card feat notch reveal"><canvas class="ico" data-icon="gear"></canvas><h3>Yours to shape</h3><p>Themes, your own accent colour, fonts, shapes and motion, all live. Add tab types, status segments and commands without code.</p></div>
+    </div>
+  </div>
+</section>
+
+<section id="claude">
+  <div class="wrap split">
+    <img class="shot reveal" src="img/hero.png" alt="a Claude Code session in fluteterm with a permission prompt" loading="lazy">
+    <div>
+      <div class="label reveal">claude code</div>
+      <h2 class="reveal">Know what every agent is doing, from any tab.</h2>
+      <ul class="dots reveal">
+        <li><b>Tab badges:</b> a spinner while it works, ⚠ when it needs you, ✓ when a turn is done.</li>
+        <li><b>Allow / deny pop-ups:</b> answer permission prompts without leaving your current tab.</li>
+        <li><b>Usage, live:</b> the 5-hour window and today's tokens across every session on your Mac.</li>
+        <li><b>Banners</b> when the panel is hidden. One click drops you into the right tab.</li>
+        <li><b>One command</b> to set up (<code>fluteterm install claude</code>) and one click to remove.</li>
+      </ul>
+      <div class="status reveal">
+        <span class="a">✻ 2 live · 1 working</span>
+        <span><span class="meter" id="win"></span> 2h 06m left in 5h window</span>
+        <span>today 11.5M</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="sessions">
+  <div class="wrap split">
+    <div>
+      <div class="label reveal">persistent sessions</div>
+      <h2 class="reveal">Close it. Quit it. Update it.<br>Your work keeps running.</h2>
+      <p class="sub reveal">Each tab lives in an invisible tmux session. Quitting fluteterm only detaches, so long builds,
+        dev servers and Claude conversations carry on. The next start re-attaches everything: same tabs,
+        same order, same directories. After a reboot, Claude tabs resume their conversation.</p>
+      <ul class="dots reveal">
+        <li><b>Selections that stick</b>, even while agents redraw the screen. Copy-on-select.</li>
+        <li><b>Shortcuts that work in any input language</b>: ⌘C on a Russian layout just copies.</li>
+        <li><b>btop, htop, vim, tmux</b>: full-screen apps render properly.</li>
+      </ul>
+    </div>
+    <img class="shot reveal" src="img/palette.png" alt="the command palette" loading="lazy">
+  </div>
+</section>
+
+<section id="look">
+  <div class="wrap split">
+    <img class="shot reveal" src="img/settings.png" alt="the settings window" loading="lazy" style="max-width:560px;justify-self:center">
+    <div>
+      <div class="label reveal">the look</div>
+      <h2 class="reveal">Pixel art, minus the squinting.</h2>
+      <p class="sub reveal">Text is smooth and readable. The pixel feel lives in the details: 1-pixel lines, notched corners,
+        block meters, dithered textures and a stepped, dissolving drop. Pick an accent:</p>
+      <div class="swatches reveal" id="swatches"></div>
+      <div class="hint reveal">This page recolours itself, just like the app.</div>
+    </div>
+  </div>
+</section>
+
+<section id="keys">
+  <div class="wrap">
+    <div class="label reveal">keys</div>
+    <h2 class="reveal">Muscle memory, respected.</h2>
+    <table class="keys card reveal">
+      <tr><td><kbd>F12</kbd></td><td>drop down / pull up (any hotkey you record)</td></tr>
+      <tr><td><kbd>⌘T</kbd> <kbd>⌘W</kbd></td><td>new tab in the same directory / close tab</td></tr>
+      <tr><td><kbd>⌘1</kbd>…<kbd>⌘9</kbd></td><td>switch tabs</td></tr>
+      <tr><td><kbd>⌘K</kbd></td><td>command palette</td></tr>
+      <tr><td><kbd>⌘⇧C</kbd></td><td>new Claude Code session here</td></tr>
+      <tr><td><kbd>⌘,</kbd></td><td>settings</td></tr>
+      <tr><td><kbd>⌘</kbd>-click</td><td>open a URL or path</td></tr>
+    </table>
+  </div>
+</section>
+
+<section class="cta">
+  <div class="wrap">
+    <div class="label reveal" style="justify-content:center">install</div>
+    <h2 class="reveal">One command.</h2>
+    <div class="install reveal">
+      <div class="cmd notch"><span class="p">$</span><span id="cmd2">brew install vuhiza/tap/fluteterm</span>
+        <button class="btn notch" data-copy="#cmd2">copy</button></div>
+    </div>
+    <div class="hint reveal">start at login: <code>brew services start fluteterm</code></div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <span>▼ fluteterm · MIT · made with Rust</span>
+    <span><a href="https://github.com/vuhiza/fluteterm">github</a> · <a href="https://github.com/vuhiza/fluteterm/issues">issues</a></span>
+  </div>
+</footer>
+
+<script>
+// Copy buttons
+document.querySelectorAll('[data-copy]').forEach(b => b.addEventListener('click', async () => {
+  const text = document.querySelector(b.dataset.copy).textContent;
+  try { await navigator.clipboard.writeText(text); b.textContent = 'copied'; } catch { b.textContent = 'select it'; }
+  setTimeout(() => b.textContent = 'copy', 1600);
+}));
+
+// Pixel icons: the app's own 7×7 icon bitmaps, drawn on the pixel grid
+const ICONS = {
+  arrow: ['.......','...#...','....#..','#######','....#..','...#...','.......'],
+  square:['.......','.#####.','.#####.','.#####.','.#####.','.#####.','.......'],
+  claude:['...#...','.#.#.#.','..###..','#######','..###..','.#.#.#.','...#...'],
+  orca:  ['...#...','..###..','.#####.','#######','.#####.','..###..','...#...'],
+  search:['.###...','#...#..','#...#..','#...#..','.####..','....##.','.....##'],
+  gear:  ['...#...','.#####.','.##.##.','###.###','.##.##.','.#####.','...#...'],
+};
+function drawIcons() {
+  const accent = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim();
+  document.querySelectorAll('canvas[data-icon]').forEach(c => {
+    const rows = ICONS[c.dataset.icon]; c.width = 7; c.height = 7;
+    const g = c.getContext('2d'); g.clearRect(0, 0, 7, 7); g.fillStyle = accent;
+    rows.forEach((r, y) => [...r].forEach((ch, x) => ch === '#' && g.fillRect(x, y, 1, 1)));
+  });
+}
+
+// Usage meter
+const win = document.getElementById('win');
+function meter() { win.innerHTML = Array.from({length: 5}, (_, i) => `<i class="${i < 3 ? 'f' : ''}"></i>`).join(''); }
+
+// Accent swatches (same palette as the app)
+const ACCENTS = { teal:'#3fb8a8', lime:'#a8d050', amber:'#e0a030', ember:'#d9643a', rose:'#e0607e', violet:'#a67be0', indigo:'#7a86e8', sky:'#5aa3c8', mint:'#78c8a0', sand:'#c8b48a', ash:'#a8a29c' };
+const sw = document.getElementById('swatches');
+function setAccent(hex) {
+  document.documentElement.style.setProperty('--accent', hex);
+  const [r, g, b] = [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16));
+  const lum = (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
+  document.documentElement.style.setProperty('--onAccent', lum > 0.6 ? '#0b0909' : '#ffffff');
+  sw.querySelectorAll('.sw').forEach(s => s.classList.toggle('on', s.dataset.hex === hex));
+  drawIcons();
+}
+Object.entries(ACCENTS).forEach(([name, hex]) => {
+  const b = document.createElement('button'); b.className = 'sw notch'; b.title = name; b.dataset.hex = hex; b.style.background = hex;
+  b.onclick = () => setAccent(hex); sw.append(b);
+});
+setAccent(ACCENTS.teal); meter();
+
+// Bayer-dither reveal, like the app's drop animation
+const B4 = [[0,8,2,10],[12,4,14,6],[3,11,1,9],[15,7,13,5]];
+const masks = [];
+for (let lvl = 0; lvl <= 16; lvl++) {
+  const c = document.createElement('canvas'); c.width = c.height = 8; const g = c.getContext('2d'); g.fillStyle = '#000';
+  for (let y = 0; y < 4; y++) for (let x = 0; x < 4; x++) if (B4[y][x] < lvl) g.fillRect(x * 2, y * 2, 2, 2);
+  masks.push(`url(${c.toDataURL()})`);
+}
+const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const els = [...document.querySelectorAll('.reveal')];
+if (!reduce) {
+  els.forEach(el => { el.style.webkitMaskImage = el.style.maskImage = masks[0]; });
+  const io = new IntersectionObserver(entries => entries.forEach(e => {
+    if (!e.isIntersecting) return;
+    io.unobserve(e.target);
+    let lvl = 0;
+    const tick = () => {
+      lvl++;
+      const m = lvl >= 16 ? 'none' : masks[lvl];
+      e.target.style.webkitMaskImage = e.target.style.maskImage = m;
+      if (lvl < 16) setTimeout(tick, 28);
+    };
+    setTimeout(tick, 60);
+  }), { threshold: 0.12 });
+  els.forEach(el => io.observe(el));
+}
+</script>
+</body>
+</html>
