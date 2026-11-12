@@ -105,6 +105,7 @@ settings window:
 
 ```toml
 hotkey = "F12"
+extra_hotkeys = ["F13"]   # optional: more keys that also toggle it
 theme  = "graphite"   # graphite clay moss glacier orchid blood paper
 accent = "#3fb8a8"    # optional
 

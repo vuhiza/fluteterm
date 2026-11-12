@@ -49,7 +49,10 @@ pub enum SAct {
     Page(Page),
     /// Persist `[table] key = value` and reload.
     Set(Option<&'static str>, &'static str, String),
-    Record,
+    /// Record a hotkey into slot 0 (main) or 1 (second).
+    Record(u8),
+    /// Remove the second hotkey.
+    ClearExtra,
     /// Some("#rrggbb") or None (theme default).
     Accent(Option<String>),
     HexEdit,
@@ -63,7 +66,8 @@ pub struct SettingsWin {
     presenter: crate::platform::present::Presenter,
     pub window: Rc<Window>,
     pub page: Page,
-    pub recording: bool,
+    /// Which hotkey slot is being recorded: 0 = main, 1 = second.
+    pub recording: Option<u8>,
     /// Text being typed into the custom accent field.
     pub hex_edit: Option<String>,
     hits: Vec<(IRect, SAct)>,
@@ -141,13 +145,13 @@ impl App {
         platform::set_blur(&window, 24);
         platform::show(&window);
         window.request_redraw();
-        self.settings = Some(SettingsWin { window, presenter, page, recording: false, hex_edit: None, hits: vec![], mouse: (0.0, 0.0) });
+        self.settings = Some(SettingsWin { window, presenter, page, recording: None, hex_edit: None, hits: vec![], mouse: (0.0, 0.0) });
     }
 
     pub fn close_settings(&mut self) {
         if let Some(s) = self.settings.take() {
             platform::order_out(&s.window);
-            if s.recording {
+            if s.recording.is_some() {
                 self.register_hotkeys();
             }
         }
@@ -208,9 +212,14 @@ impl App {
                 config::set_value(table, key, &value);
                 self.reload_config(true);
             }
-            SAct::Record => {
+            SAct::ClearExtra => {
+                config::set_value(None, "extra_hotkeys", "[]");
+                self.reload_config(true);
+                self.register_hotkeys();
+            }
+            SAct::Record(slot) => {
                 if let Some(s) = &mut self.settings {
-                    s.recording = true;
+                    s.recording = Some(slot);
                 }
                 // Free the current hotkey so it can be pressed while recording.
                 if let Some(m) = &self.hotkey_mgr {
@@ -293,18 +302,26 @@ impl App {
             }
             return;
         }
-        let recording = self.settings.as_ref().map(|s| s.recording).unwrap_or(false);
-        if recording {
+        let recording = self.settings.as_ref().and_then(|s| s.recording);
+        if let Some(slot) = recording {
             if matches!(ev.logical_key, Key::Named(NamedKey::Escape)) {
                 if let Some(s) = &mut self.settings {
-                    s.recording = false;
+                    s.recording = None;
                 }
                 self.register_hotkeys();
             } else if let Some(acc) = accelerator(ev, mods) {
                 if let Some(s) = &mut self.settings {
-                    s.recording = false;
+                    s.recording = None;
                 }
-                config::set_value(None, "hotkey", &q(&acc));
+                if slot == 0 {
+                    config::set_value(None, "hotkey", &q(&acc));
+                } else {
+                    // The second slot is the first `extra_hotkeys` entry; keep any others.
+                    let mut extra = self.cfg.extra_hotkeys.clone();
+                    if extra.is_empty() { extra.push(acc) } else { extra[0] = acc }
+                    let list = extra.iter().map(|k| q(k)).collect::<Vec<_>>().join(", ");
+                    config::set_value(None, "extra_hotkeys", &format!("[{list}]"));
+                }
                 self.reload_config(true);
                 self.register_hotkeys();
             }
@@ -337,7 +354,7 @@ impl App {
 
     // ───────────────────────────── drawing ─────────────────────────────
 
-    fn draw_settings(&mut self, cv: &mut Canvas, page: Page, recording: bool, hex_edit: Option<String>) -> Vec<(IRect, SAct)> {
+    fn draw_settings(&mut self, cv: &mut Canvas, page: Page, recording: Option<u8>, hex_edit: Option<String>) -> Vec<(IRect, SAct)> {
         let pal = self.pal.clone();
         let u = cv.unit();
         let upx = 13.5 * cv.scale;
@@ -438,9 +455,11 @@ impl App {
                 let _ = y;
             }
             Page::Keys => {
-                y = self.s_heading(cv, mx, y, mw, "global hotkey", &pal);
-                y = self.s_hotkey(cv, &mut hits, mx, y, mw, &cfg.hotkey, recording, &pal);
-                y = self.s_note(cv, mx, y, mw, "F12 on a laptop keyboard may need fn. ⌘Space is taken by Spotlight unless you disable it in System Settings.", &pal);
+                y = self.s_heading(cv, mx, y, mw, "global hotkeys", &pal);
+                y = self.s_hotkey(cv, &mut hits, mx, y, mw, "main", &cfg.hotkey, recording == Some(0), 0, &pal);
+                let second = cfg.extra_hotkeys.first().cloned().unwrap_or_default();
+                y = self.s_hotkey(cv, &mut hits, mx, y, mw, "second", &second, recording == Some(1), 1, &pal);
+                y = self.s_note(cv, mx, y, mw, "Both toggle the panel: e.g. F13 on an external keyboard and F12 on the Mac's own. F12 on a laptop keyboard may need fn. ⌘Space is taken by Spotlight unless you disable it in System Settings.", &pal);
                 let opts = [(OptionAsAlt::Left, "left"), (OptionAsAlt::Right, "right"), (OptionAsAlt::Both, "both"), (OptionAsAlt::None, "none")];
                 y = self.s_chips(cv, &mut hits, mx, y + cv.px(4.0), mw, "option as meta", opts.iter().map(|(o, n)| (n.to_string(), cfg.option_as_alt == *o, SAct::Set(None, "option_as_alt", q(n)))).collect(), &pal);
                 y = self.s_check(cv, &mut hits, mx, y, mw, "copy on select", "selected text goes to the clipboard right away (⌘C also works)", cfg.copy_on_select, SAct::Set(None, "copy_on_select", (!cfg.copy_on_select).to_string()), &pal);
@@ -732,19 +751,43 @@ impl App {
     }
 
     #[allow(clippy::too_many_arguments)]
-    fn s_hotkey(&mut self, cv: &mut Canvas, hits: &mut Vec<(IRect, SAct)>, x: i32, y: i32, w: i32, current: &str, recording: bool, pal: &theme::Palette) -> i32 {
+    fn s_hotkey(
+        &mut self,
+        cv: &mut Canvas,
+        hits: &mut Vec<(IRect, SAct)>,
+        x: i32,
+        y: i32,
+        w: i32,
+        label: &str,
+        current: &str,
+        recording: bool,
+        slot: u8,
+        pal: &theme::Palette,
+    ) -> i32 {
         let upx = 13.5 * cv.scale;
         let lh = self.fonts.line_height(upx);
         let u = cv.unit();
+        let lw = cv.px(70.0);
+        self.fonts.draw_text(cv, x, y + cv.px(7.0), label, upx, Style::Regular, Color::rgb(pal.dim));
+        let fx = x + lw;
         let fw = (w / 2).min(cv.px(260.0));
-        let r = IRect::new(x, y, fw, lh + cv.px(14.0));
+        let r = IRect::new(fx, y, fw, lh + cv.px(14.0));
         cv.fill(r, Color::rgb(pal.bg));
         cv.stroke(r, u, Color::rgb(if recording { pal.accent } else { pal.line }));
-        let shown = if recording { "press the new shortcut…  (esc cancels)".to_string() } else { current.replace("Key", "").replace('+', " + ") };
-        self.fonts.draw_text(cv, x + cv.px(10.0), y + cv.px(7.0), &shown, upx, if recording { Style::Regular } else { Style::Bold }, Color::rgb(if recording { pal.accent } else { pal.text }));
-        hits.push((r, SAct::Record));
-        let bx = x + fw + cv.px(10.0);
-        self.s_button(cv, hits, bx, y + cv.px(2.0), if recording { "recording…" } else { "record" }, !recording, SAct::Record, pal);
+        let (shown, style, color) = if recording {
+            ("press the new shortcut…  (esc cancels)".to_string(), Style::Regular, pal.accent)
+        } else if current.is_empty() {
+            ("none".to_string(), Style::Regular, pal.faint)
+        } else {
+            (current.replace("Key", "").replace('+', " + "), Style::Bold, pal.text)
+        };
+        self.fonts.draw_text(cv, fx + cv.px(10.0), y + cv.px(7.0), &shown, upx, style, Color::rgb(color));
+        hits.push((r, SAct::Record(slot)));
+        let mut bx = fx + fw + cv.px(10.0);
+        bx += self.s_button(cv, hits, bx, y + cv.px(2.0), if recording { "recording…" } else { "record" }, !recording, SAct::Record(slot), pal);
+        if slot == 1 && !current.is_empty() && !recording {
+            self.s_button(cv, hits, bx + cv.px(8.0), y + cv.px(2.0), "clear", false, SAct::ClearExtra, pal);
+        }
         y + r.h + cv.px(10.0)
     }
 
