@@ -137,6 +137,12 @@ pub fn show(w: &Window) {
     let Some(win) = ns_window(w) else { return };
     unsafe {
         let app = ns_app();
+        // `hide_app` hid the whole app when the panel closed. Activation below is a
+        // request macOS may refuse (e.g. right after a Space switch, when the new
+        // Space's frontmost app doesn't yield), and a hidden app's windows can't be
+        // ordered on screen. So un-hide explicitly, and order the panel in
+        // regardless of whether we become active.
+        let _: () = msg_send![app, unhideWithoutActivation];
         // macOS 14+: cooperative activation (`activate`); older: ignoringOtherApps.
         let modern: Bool = msg_send![app, respondsToSelector: objc2::sel!(activate)];
         if modern.as_bool() {
@@ -145,9 +151,10 @@ pub fn show(w: &Window) {
         let _: () = msg_send![app, activateIgnoringOtherApps: Bool::YES];
         let me: *mut AnyObject = msg_send![class!(NSRunningApplication), currentApplication];
         if !me.is_null() {
-            // NSApplicationActivateAllWindows
-            let _: Bool = msg_send![me, activateWithOptions: 1usize];
+            // NSApplicationActivateAllWindows | NSApplicationActivateIgnoringOtherApps
+            let _: Bool = msg_send![me, activateWithOptions: 3usize];
         }
+        let _: () = msg_send![win, orderFrontRegardless];
         let _: () = msg_send![win, makeKeyAndOrderFront: std::ptr::null_mut::<AnyObject>()];
         let _: () = msg_send![win, makeKeyWindow];
         // Make sure the content view (winit's) receives key events.

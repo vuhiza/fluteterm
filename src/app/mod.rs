@@ -507,6 +507,13 @@ impl App {
                 if t >= 1.0 {
                     self.set_window_height(geo.h);
                     self.vis = Vis::Shown;
+                    // macOS can refuse the activation on show (just after a Space
+                    // switch); ask again so the panel gets keyboard focus.
+                    if !platform::app_is_active() {
+                        if let Some(w) = &self.window {
+                            platform::show(w);
+                        }
+                    }
                     release_memory();
                     return 1.0;
                 }
